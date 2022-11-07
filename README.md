@@ -14,9 +14,9 @@ Integrantes:
 - Lucas Oliveira
 
 Nome da marca: Insbike
-
+<div align="center">
 <img src="./img/logo.png" alt="logo" width="200" />
-
+</div>
 ## Interface
 
 ### Proposta UX 1 - C
@@ -26,7 +26,7 @@ Nome da marca: Insbike
 >    - Indica quais são os widgets do LVGL &#x2705; <br>
 >    LABEL, IMAGE, BUTTON, BASE OBJECT
 >    - Apresentar uma foto da interface sendo executada no LCD (imagem estática) &#x2705;
-<div>
+<div align="center">
 <img src="./img/img_inicial_1.jpg" alt="img_inicial" width="200"/>
 <img src="./img/img_prop_1.jpg" alt="img_inicial1" width="200"/>
 <img src="./img/prop1_img2.jpg" alt="img_inicial2" width="200"/>
@@ -54,17 +54,18 @@ Descrição da primeira proposta da interface:
 > - Grava um vídeo atualizado explicando o que foi sugerido e o que fizeram para melhorar a interface. &#x2705;
 - Link para o vídeo:
 > - Apresentar uma foto da interface sendo executada no LCD (imagem estática). &#x2705;
-<div>
+<div align="center" >
 <img src="./img/img_apos_luiz.jpg" alt="img_luiz" width="200"/>
 <img src="./img/img1.png" alt="img1" width="200"/>
 <img src="./img/img2.png" alt="img2" width="200"/>
 <img src="./img/img3.png" alt="img3" width="200"/>
-<div> <br>
+</div> <br>
 Detalhes da segunda interação da proposta de interface:
 
 - Luiz falou principalmente sobre a borda da velocidade instântanea, que ele achou que poderia ser mais grossa para dar mais visibilidade e também deixar mais branco os títulos, como "distância", "cronômetro", e etc, porque ele estava achando muito escuro. Além disso, ele comentou também sobre a adição de alguma forma de voltar para  a página inicial após ir para a página de histórico e de configurações. Para isso, decidimos adicionar uma página a mais que apareceria por aproximadamente 2 segudos quando trocasse para outra página. <br>
+<div align="center">
 <img src="./img/img4.png" alt="img4" width="200"/>
-
+</div>
 
 - Imagem da proposta &#x2705;
 - Imagem da proposta no LCD &#x2705;
@@ -80,12 +81,12 @@ Detalhes da segunda interação da proposta de interface:
 - Link para o vídeo: 
 > - Apresentar uma foto da interface sendo executada no LCD (imagem estática). &#x2705;
 - Design Final
-<div>
+<div align="center">
 <img src="./img/img_apos_ana.jpg" alt="img_ana" width="200"/>
 <img src="./img/img1-final.png" alt="img1-final" width="200"/>
 <img src="./img/img2-final.png" alt="img2-final" width="200"/>
 <img src="./img/img3-final.png" alt="img3-final" width="200"/>
-<div> <br>
+</div> <br>
 
 Detalhes da terceira interação da proposta de interface:
 - Ana falou principalmente para deixar as cores dos títulos ainda mais brancas, porque estava com muita dificuldade para enxergar. Além disso, ela também falou que não era necessário o uso de uma quarta tela para representar a volta com o logo e que podiamos apenas apresentar no pitch. Outra coisa que ela pediu pra mudar, que mesmo sendo só representação, 70km é um valor muito absurdo de velocidade, então diminuir para algo mais plausível.
