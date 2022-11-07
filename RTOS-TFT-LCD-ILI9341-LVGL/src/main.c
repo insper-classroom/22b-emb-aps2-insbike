@@ -5,6 +5,10 @@
 #include <asf.h>
 #include <string.h>
 #include "ili9341.h"
+#include "img1.h"
+#include "img2.h"
+#include "img3.h"
+#include "img4.h"
 #include "lvgl.h"
 #include "touch/touch.h"
 
@@ -12,8 +16,8 @@
 /* LCD / LVGL                                                           */
 /************************************************************************/
 
-#define LV_HOR_RES_MAX          (320)
-#define LV_VER_RES_MAX          (240)
+#define LV_HOR_RES_MAX          (240)
+#define LV_VER_RES_MAX          (320)
 
 /*A static or global variable to store the buffers*/
 static lv_disp_draw_buf_t disp_buf;
@@ -94,6 +98,9 @@ static void task_lcd(void *pvParameters) {
 	int px, py;
 
 	lv_ex_btn_1();
+	lv_obj_t * img = lv_img_create(lv_scr_act());
+	lv_img_set_src(img, &img4);
+	lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
 
 	for (;;)  {
 		lv_tick_inc(50);
@@ -155,8 +162,8 @@ void my_input_read(lv_indev_drv_t * drv, lv_indev_data_t*data) {
 	else
 		data->state = LV_INDEV_STATE_RELEASED; 
 	
-	data->point.x = px;
-	data->point.y = py;
+	data->point.x = py;
+	data->point.y = 320 - px;
 }
 
 void configure_lvgl(void) {
@@ -190,6 +197,7 @@ int main(void) {
 
 	/* LCd, touch and lvgl init*/
 	configure_lcd();
+	ili9341_set_orientation(ILI9341_FLIP_Y | ILI9341_SWITCH_XY);
 	configure_touch();
 	configure_lvgl();
 
