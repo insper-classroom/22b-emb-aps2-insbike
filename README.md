@@ -38,6 +38,7 @@ Nome da marca: Insbike
 - Link para o vídeo:
 
 Descrição da primeira proposta da interface:
+- A tela começa com o logo da empresa no canto superior esquerdo e o horário atual no cato superior direito. Abaixo, se tem um círculo onde fica a velocidade instantânea do ciclista e a indicação da aceleração, sendo o play do lado para começar a corrida e o pause para pausar, aparecendo um quadrado logo depois para caso o ciclista queira salvar a corrida. Logo após, têm-se a duração, ou seja, o cronômetro contando o tempo do percurso. Em baixo, têm-se as medições da distância e da velocidade média, sendo seguido pelo botão de reiniciar/apaga no canto inferior esquerdo, o botão de histórico de percursos e o botão de configuração onde se troca o tamanho do aro da roda.
 
 - Imagem da proposta &#x2705;
 - Imagem da proposta no LCD &#x2705;
