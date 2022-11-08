@@ -35,10 +35,10 @@ Nome da marca: Insbike
 </div>
 > - Grava um vídeo explicando a interface &#x2705; <br> 
 
-- Link para o vídeo:
+- Link para o vídeo: https://youtu.be/p1WgfblvrRM
 
 Descrição da primeira proposta da interface:
-- A tela começa com o logo da empresa no canto superior esquerdo e o horário atual no cato superior direito. Abaixo, se tem um círculo onde fica a velocidade instantânea do ciclista e a indicação da aceleração, sendo o play do lado para começar a corrida e o pause para pausar, aparecendo um quadrado logo depois para caso o ciclista queira salvar a corrida. Logo após, têm-se a duração, ou seja, o cronômetro contando o tempo do percurso. Em baixo, têm-se as medições da distância e da velocidade média, sendo seguido pelo botão de reiniciar/apaga no canto inferior esquerdo, o botão de histórico de percursos e o botão de configuração onde se troca o tamanho do aro da roda.
+- A tela começa com o logo da empresa no canto superior esquerdo e o horário atual no canto superior direito. Abaixo, se tem um círculo onde fica a velocidade instantânea do ciclista e a indicação da aceleração, sendo o play do lado para começar a corrida e o pause para pausar, aparecendo um quadrado logo depois para caso o ciclista queira salvar a corrida. Logo após, têm-se a duração, ou seja, o cronômetro contando o tempo do percurso. Em baixo, têm-se as medições da distância e da velocidade média, sendo seguido pelo botão de reiniciar/apaga no canto inferior esquerdo, o botão de histórico de percursos e o botão de configuração onde se troca o tamanho do aro da roda.
 
 - Imagem da proposta &#x2705;
 - Imagem da proposta no LCD &#x2705;
@@ -52,7 +52,7 @@ Descrição da primeira proposta da interface:
 >   - Grava em vídeo a entrevista
 - Link para o vídeo: https://youtu.be/UBOfn0IV4_k
 > - Grava um vídeo atualizado explicando o que foi sugerido e o que fizeram para melhorar a interface. &#x2705;
-- Link para o vídeo:
+- Link para o vídeo: https://youtu.be/lOV_jCf2ZGs
 > - Apresentar uma foto da interface sendo executada no LCD (imagem estática). &#x2705;
 <div align="center" >
 <img src="./img/img_apos_luiz.jpg" alt="img_luiz" width="200"/>
@@ -78,7 +78,7 @@ Detalhes da segunda interação da proposta de interface:
 >     - Grava em vídeo a entrevista. &#x2705;
 - Link para o vídeo: https://youtu.be/DBiGGmODKco
 > - Grava um vídeo atualizado explicando o que foi sugerido e o que fizeram para melhorar a interface. &#x2705;
-- Link para o vídeo: 
+- Link para o vídeo: https://youtu.be/K8pXIM5NEsE 
 > - Apresentar uma foto da interface sendo executada no LCD (imagem estática). &#x2705;
 - Design Final
 <div align="center">
