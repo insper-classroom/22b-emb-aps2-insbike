@@ -28,6 +28,11 @@ LV_IMG_DECLARE(logo_pequeno);
 #define RAIO 0.508/2
 #define VEL_MAX_KMH  5.0f
 #define VEL_MIN_KMH  0.5f
+
+#define SENSOR_PIO		 PIOA
+#define SENSOR_PIO_ID	 ID_PIOA
+#define SENSOR_PIO_IDX	 19
+#define SENSOR_PIO_IDX_MASK (1 << SENSOR_PIO_IDX)
 //#define RAMP 
 
 /************************************************************************/
@@ -46,6 +51,8 @@ static lv_disp_drv_t disp_drv;          /*A variable to hold the drivers. Must b
 static lv_indev_drv_t indev_drv;
 
 static lv_obj_t * scr1;  // screen 1
+QueueHandle_t xQueuedt;
+
 
 typedef struct  {
   uint32_t year;
@@ -185,10 +192,10 @@ static void task_simulador(void *pvParameters) {
         ramp_up = 0;
     else if (vel <= VEL_MIN_KMH)
     ramp_up = 1;
-#ifndef RAMP
-        vel = 5;
-        printf("[SIMU] CONSTANTE: %d \n", (int) (10*vel));
-#endif
+//#ifndef RAMP
+        // vel = 5;
+        // printf("[SIMU] CONSTANTE: %d \n", (int) (10*vel));
+//#endif
         f = kmh_to_hz(vel, RAIO);
         int t = 965*(1.0/f); //UTILIZADO 965 como multiplicador ao invés de 1000
                              //para compensar o atraso gerado pelo Escalonador do freeRTOS
@@ -234,6 +241,67 @@ static void settings_handler(lv_event_t * e) {
 	if(code == LV_EVENT_CLICKED) {
 		LV_LOG_USER("Clicked");
 	}
+}
+static void RTT_init(float freqPrescale, uint32_t IrqNPulses,
+uint32_t rttIRQSource) {
+
+	uint16_t pllPreScale = (int)(((float)32768) / freqPrescale);
+
+	rtt_sel_source(RTT, false);
+	rtt_init(RTT, pllPreScale);
+
+	if (rttIRQSource & RTT_MR_ALMIEN) {
+		uint32_t ul_previous_time;
+		ul_previous_time = rtt_read_timer_value(RTT);
+		while (ul_previous_time == rtt_read_timer_value(RTT))
+		;
+		rtt_write_alarm_time(RTT, IrqNPulses + ul_previous_time);
+	}
+
+	/* config NVIC */
+	NVIC_DisableIRQ(RTT_IRQn);
+	NVIC_ClearPendingIRQ(RTT_IRQn);
+	NVIC_SetPriority(RTT_IRQn, 4);
+	NVIC_EnableIRQ(RTT_IRQn);
+
+	/* Enable RTT interrupt */
+	if (rttIRQSource & (RTT_MR_RTTINCIEN | RTT_MR_ALMIEN))
+	rtt_enable_interrupt(RTT, rttIRQSource);
+	else
+	rtt_disable_interrupt(RTT, RTT_MR_RTTINCIEN | RTT_MR_ALMIEN);
+}
+
+void RTT_Handler(void) {
+  uint32_t ul_status;
+  ul_status = rtt_get_status(RTT);
+
+  /* IRQ due to Alarm */
+  if ((ul_status & RTT_SR_ALMS) == RTT_SR_ALMS) {
+	
+   }  
+}
+
+
+
+
+void sensor_callback(void){
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	int dt = rtt_read_timer_value(RTT);
+	printf("rtt %d \n", dt);
+	xQueueSendFromISR(xQueuedt,&dt,&xHigherPriorityTaskWoken);
+	RTT_init(1000,1000,NULL);
+}
+
+static void io_init(void)
+{
+	/* Configure speed sensor input */
+	pio_configure(SENSOR_PIO, PIO_INPUT, SENSOR_PIO_IDX_MASK, PIO_DEFAULT);
+	pio_set_debounce_filter(SENSOR_PIO, SENSOR_PIO_IDX_MASK, 60);
+	pio_handler_set(SENSOR_PIO, SENSOR_PIO_ID, SENSOR_PIO_IDX_MASK, PIO_IT_FALL_EDGE, &sensor_callback);
+	pio_enable_interrupt(SENSOR_PIO, SENSOR_PIO_IDX_MASK);
+	pio_get_interrupt_status(SENSOR_PIO);
+	NVIC_EnableIRQ(SENSOR_PIO_ID);
+	NVIC_SetPriority(SENSOR_PIO_ID, 4);
 }
 /************************************************************************/
 /* TASKS                                                                */
@@ -365,16 +433,27 @@ void lv_screen(void){
 
 static void task_lcd(void *pvParameters) {
 	int px, py;
+
+	io_init();
+	RTT_init(1000,1000,NULL);
+
 	scr1  = lv_obj_create(NULL);
 	lv_screen();
 	lv_scr_load(scr1);
-
+	int dt = 0;
 	for (;;)  {
+		if (xQueueReceive(xQueuedt, &dt, 0)) {
+			//limitei a 100 a temperatura maxima
+			// 100 -- 4092
+			//  x -- value
+			printf("rtt dt %d", dt);
+		}
 		lv_tick_inc(50);
 		lv_task_handler();
 		vTaskDelay(50);
 	}
 }
+
 static void task_rtc(void *pvParameters) {
 	calendar rtc_initial = {2018, 3, 19, 12, 15, 45 ,1};
 
@@ -487,6 +566,11 @@ int main(void) {
 	configure_touch();
 	configure_lvgl();
 
+	xQueuedt = xQueueCreate(32, sizeof(int));
+
+	if (xQueuedt == NULL){
+		printf("falha em criar a queue \n");
+	}
 	/* Create task to control oled */
 	if (xTaskCreate(task_lcd, "LCD", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create lcd task\r\n");
