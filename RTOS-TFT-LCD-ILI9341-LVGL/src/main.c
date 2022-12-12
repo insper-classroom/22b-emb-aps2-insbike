@@ -55,6 +55,11 @@ static lv_obj_t *scr1; // screen 1
 QueueHandle_t xQueuedt;
 SemaphoreHandle_t xSemaphore;
 
+int conta_cronometro = 0;
+int cronometro = 0;
+float v_media = 0.0;
+float d = 0.0;
+
 typedef struct
 {
 	uint32_t year;
@@ -102,7 +107,7 @@ lv_obj_t *labelDistancia;
 lv_obj_t *labelVMedia;
 lv_obj_t *labelVInst;
 lv_obj_t *labelUp;
-lv_obj_t *labelDown;
+lv_obj_t *labelGravando;
 /************************************************************************/
 /* lvgl                                                                 */
 /************************************************************************/
@@ -229,8 +234,10 @@ static void pause_handler(lv_event_t *e)
 	lv_event_code_t code = lv_event_get_code(e);
 
 	if (code == LV_EVENT_CLICKED)
-	{
+	{		
 		LV_LOG_USER("Clicked");
+		conta_cronometro = 0;
+		lv_obj_add_flag(labelGravando, LV_OBJ_FLAG_HIDDEN);
 	}
 }
 
@@ -238,19 +245,27 @@ static void play_handler(lv_event_t *e)
 {
 	lv_event_code_t code = lv_event_get_code(e);
 
-	if (code == LV_EVENT_CLICKED)
-	{
+	if (code == LV_EVENT_CLICKED){
 		LV_LOG_USER("Clicked");
-	}
+		conta_cronometro = 1;
+		lv_obj_clear_flag(labelGravando, LV_OBJ_FLAG_HIDDEN);
+		}
 }
 
 static void refresh_handler(lv_event_t *e)
 {
 	lv_event_code_t code = lv_event_get_code(e);
 
-	if (code == LV_EVENT_CLICKED)
-	{
+	if (code == LV_EVENT_CLICKED){
 		LV_LOG_USER("Clicked");
+		conta_cronometro = 0;
+		cronometro = 0;
+		d = 0.00;
+		v_media = 0.00;
+		lv_label_set_text_fmt(labelDuration, "%02d:%02d:%02d", 0, 0, 0);
+		lv_obj_add_flag(labelGravando, LV_OBJ_FLAG_HIDDEN);
+		lv_label_set_text_fmt(labelVMedia, "%.2f", v_media);
+		lv_label_set_text_fmt(labelDistancia, "%.2f", d);
 	}
 }
 
@@ -435,13 +450,13 @@ void lv_screen(void)
 	lv_obj_align(labelDistancia, LV_ALIGN_CENTER, -50, 78);
 	lv_obj_set_style_text_font(labelDistancia, &roboto20, LV_STATE_DEFAULT);
 	lv_obj_set_style_text_color(labelDistancia, lv_color_white(), LV_STATE_DEFAULT);
-	lv_label_set_text_fmt(labelDistancia, "%.2f", 0.0);
+	lv_label_set_text_fmt(labelDistancia, "%.2f", 0.00);
 
 	labelVMedia = lv_label_create(scr1);
 	lv_obj_align(labelVMedia, LV_ALIGN_CENTER, 50, 78);
 	lv_obj_set_style_text_font(labelVMedia, &roboto20, LV_STATE_DEFAULT);
 	lv_obj_set_style_text_color(labelVMedia, lv_color_white(), LV_STATE_DEFAULT);
-	lv_label_set_text_fmt(labelVMedia, "%.1f", 0.0);
+	lv_label_set_text_fmt(labelVMedia, "%.2f", 0.00);
 
 	labelVInst = lv_label_create(scr1);
 	lv_obj_align(labelVInst, LV_ALIGN_CENTER, 0, -78);
@@ -458,6 +473,12 @@ void lv_screen(void)
 	lv_obj_center(labelUp);
 	lv_obj_set_width(btnUp, 10);
 	lv_obj_set_height(btnUp, 10);
+
+	labelGravando = lv_label_create(scr1);
+	lv_obj_align(labelGravando, LV_ALIGN_CENTER, 40, 3);
+	lv_label_set_text(labelGravando, LV_SYMBOL_SAVE);
+	lv_obj_set_style_text_color(labelGravando, lv_color_white(), LV_STATE_DEFAULT);
+	lv_obj_add_flag(labelGravando, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void task_lcd(void *pvParameters)
@@ -486,7 +507,6 @@ static void task_operacoes(void *pvParameters){
 	float prev_speed = 0.0;
 	int operacao = 1;
 	float f, w, v, tempo_decorrido, a;
-	float d = 0.0;
 	float prev_a = 0.0;
 	for (;;)
 	{
@@ -503,13 +523,18 @@ static void task_operacoes(void *pvParameters){
 				w = 2 * PI * f;
 				v = w * RAIO;
 				v = v * 3.6;
-				d += (v*tempo_decorrido/3.6)/1000;
+				d += 2*PI*RAIO/1000;
 				printf("Velocidade: %f km/h \n", v);
 				a = (v - prev_speed);
 				
 				lv_label_set_text_fmt(labelVInst, "%.2f", v);				
 				//printf("Aceleracao: %f \n",a);
-				lv_label_set_text_fmt(labelDistancia, "%.2f", d);
+
+				if (conta_cronometro == 1){
+					v_media = ((d*1000)/cronometro)*3.6;
+					lv_label_set_text_fmt(labelDistancia, "%.2f", d);
+					lv_label_set_text_fmt(labelVMedia, "%.2f", v_media);
+				}
 
 				printf("Distancia: %f km \n", d);
 
@@ -542,6 +567,8 @@ static void task_rtc(void *pvParameters)
 	rtc_get_time(RTC, &current_hour, &current_min, &current_sec);
 	rtc_get_date(RTC, &current_year, &current_month, &current_day, &current_week);
 
+	int minuto = 0;
+	int segundo = 0;
 	for (;;)
 	{
 		if (xSemaphoreTake(xSemaphoreHora, 0) == pdTRUE)
@@ -549,6 +576,16 @@ static void task_rtc(void *pvParameters)
 			rtc_get_time(RTC, &current_hour, &current_min, &current_sec);
 			rtc_get_date(RTC, &current_year, &current_month, &current_day, &current_week);
 			lv_label_set_text_fmt(labelTempo, "%02d:%02d:%02d", current_hour, current_min, current_sec);
+
+			if (conta_cronometro == 1){
+				cronometro = cronometro + 1;
+
+				minuto = (cronometro/60) % 60;
+				segundo = cronometro % 60;
+
+				lv_label_set_text_fmt(labelDuration, "%02d:%02d:%02d", 0, minuto, segundo);
+
+			}
 		}
 	}
 }
@@ -681,6 +718,7 @@ int main(void)
 	xSemaphore = xSemaphoreCreateBinary();
 	if (xSemaphore == NULL)
 		printf("falha em criar o semaforo \n");
+
 	xSemaphoreHora = xSemaphoreCreateBinary();
 	if (xSemaphoreHora == NULL)
 		printf("falha em criar o semaforo \n");
