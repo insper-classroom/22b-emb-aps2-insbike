@@ -51,6 +51,7 @@ static lv_disp_drv_t disp_drv; /*A variable to hold the drivers. Must be static 
 static lv_indev_drv_t indev_drv;
 
 static lv_obj_t *scr1; // screen 1
+
 QueueHandle_t xQueuedt;
 SemaphoreHandle_t xSemaphore;
 
@@ -101,6 +102,7 @@ lv_obj_t *labelDistancia;
 lv_obj_t *labelVMedia;
 lv_obj_t *labelVInst;
 lv_obj_t *labelUp;
+lv_obj_t *labelDown;
 /************************************************************************/
 /* lvgl                                                                 */
 /************************************************************************/
@@ -198,12 +200,12 @@ static void task_simulador(void *pvParameters)
 
 		if (ramp_up)
 		{
-			// printf("[SIMU] ACELERANDO: %d \n", (int)(10 * vel));
+			//printf("[SIMU] ACELERANDO: %d \n", (int)(10 * vel));
 			vel += 0.5;
 		}
 		else
 		{
-			// printf("[SIMU] DESACELERANDO: %d \n", (int)(10 * vel));
+			//printf("[SIMU] DESACELERANDO: %d \n", (int)(10 * vel));
 			vel -= 0.5;
 		}
 
@@ -312,6 +314,7 @@ void RTT_Handler(void)
 	{
 	}
 }
+
 
 void sensor_callback(void)
 {
@@ -432,7 +435,7 @@ void lv_screen(void)
 	lv_obj_align(labelDistancia, LV_ALIGN_CENTER, -50, 78);
 	lv_obj_set_style_text_font(labelDistancia, &roboto20, LV_STATE_DEFAULT);
 	lv_obj_set_style_text_color(labelDistancia, lv_color_white(), LV_STATE_DEFAULT);
-	lv_label_set_text_fmt(labelDistancia, "%.1f", 0.0);
+	lv_label_set_text_fmt(labelDistancia, "%.2f", 0.0);
 
 	labelVMedia = lv_label_create(scr1);
 	lv_obj_align(labelVMedia, LV_ALIGN_CENTER, 50, 78);
@@ -446,14 +449,12 @@ void lv_screen(void)
 	lv_obj_set_style_text_color(labelVInst, lv_color_white(), LV_STATE_DEFAULT);
 	lv_label_set_text_fmt(labelVInst, "%.1f", 0.0);
 
-	lv_obj_t *labelUp;
-
 	lv_obj_t *btnUp = lv_btn_create(scr1);
 	lv_obj_align(btnUp, LV_ALIGN_CENTER, 0, -38);
 	lv_obj_add_style(btnUp, &style, 0);
 
 	labelUp = lv_label_create(btnUp);
-	lv_label_set_text(labelUp, LV_SYMBOL_UP);
+	lv_label_set_text(labelUp, LV_SYMBOL_MINUS);
 	lv_obj_center(labelUp);
 	lv_obj_set_width(btnUp, 10);
 	lv_obj_set_height(btnUp, 10);
@@ -468,7 +469,7 @@ static void task_lcd(void *pvParameters)
 	scr1 = lv_obj_create(NULL);
 	lv_screen();
 	lv_scr_load(scr1);
-	int dt = 0;
+
 	for (;;)
 	{
 
@@ -477,48 +478,53 @@ static void task_lcd(void *pvParameters)
 		vTaskDelay(50);
 	}
 }
-static void task_operacoes(void *pvParameters)
-{
-	RTT_init(100, 100, NULL);
-	uint32_t tempo_inicial = 0;
-	float prev_speed = 0;
+
+static void task_operacoes(void *pvParameters){
+	RTT_init(1000, 0, 0);
+	float tempo_inicial = 0.0;
+	float tempo_final = 0.0;
+	float prev_speed = 0.0;
 	int operacao = 1;
+	float f, w, v, tempo_decorrido, a;
+	float d = 0.0;
+	float prev_a = 0.0;
 	for (;;)
 	{
-		if (xSemaphoreTake(xSemaphore, portMAX_DELAY) == pdTRUE)
-		{
-			if (operacao == 1)
-			{
+		if (xSemaphoreTake(xSemaphore, 0)){
+			if (operacao == 1){
 				tempo_inicial = rtt_read_timer_value(RTT);
 				operacao = 2;
 			}
-			else if (operacao == 2)
-			{
-				uint32_t tempo_final = rtt_read_timer_value(RTT);
-				float tempo_decorrido = (tempo_final - tempo_inicial) / 1000.0;
-				printf("Tempo decorrido: %f s \r \n", tempo_decorrido);
-				float f = 1 / tempo_decorrido;
-				float w = 2 * 3.14 * f;
-				float v = w * RAIO;
-				printf("Velocidade: %f m/s \r \n", v);
+			else if (operacao == 2){
+				tempo_final = rtt_read_timer_value(RTT);
+				tempo_decorrido = (tempo_final - tempo_inicial) / 1000.0;
+				printf("Tempo decorrido: %f s , tempo inicial %f, tempo final %f\n", tempo_decorrido, tempo_inicial, tempo_final);
+				f = 1 / tempo_decorrido;
+				w = 2 * PI * f;
+				v = w * RAIO;
 				v = v * 3.6;
-				float a = (v - prev_speed) / tempo_decorrido;
+				d += (v*tempo_decorrido/3.6)/1000;
+				printf("Velocidade: %f km/h \n", v);
+				a = (v - prev_speed);
 				
+				lv_label_set_text_fmt(labelVInst, "%.2f", v);				
+				//printf("Aceleracao: %f \n",a);
+				lv_label_set_text_fmt(labelDistancia, "%.2f", d);
 
-				lv_label_set_text_fmt(labelVInst, "%d", (int)v);
-				
-				tempo_inicial = rtt_read_timer_value(RTT);
-				prev_speed = v;
-				printf("%f",a);
-				if (a > 0)
-				{
+				printf("Distancia: %f km \n", d);
+
+				if (a > 0){
 					lv_label_set_text(labelUp, LV_SYMBOL_UP);
 				}
-				else 
-				{
+				else if (a == 0){
+					lv_label_set_text(labelUp, LV_SYMBOL_MINUS);
+				}
+				else {
 					lv_label_set_text(labelUp, LV_SYMBOL_DOWN);
 				}
-
+				prev_a = a;
+				prev_speed = v;
+				operacao = 1;
 			}
 		}
 	}
