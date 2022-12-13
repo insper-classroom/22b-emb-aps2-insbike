@@ -11,8 +11,10 @@
 #include "img4.h"
 #include "logo_pequeno.h"
 #include "background.h"
+#include "background_aro.h"
 #include "lvgl.h"
 #include "touch/touch.h"
+#include <stdio.h>
 
 LV_FONT_DECLARE(dseg10);
 LV_FONT_DECLARE(roboto20);
@@ -22,10 +24,12 @@ LV_IMG_DECLARE(logo_pequeno);
 
 #include "arm_math.h"
 
+
+
 #define TASK_SIMULATOR_STACK_SIZE (4096 / sizeof(portSTACK_TYPE))
 #define TASK_SIMULATOR_STACK_PRIORITY (tskIDLE_PRIORITY)
 
-#define RAIO 0.508 / 2
+float RAIO = 0.508 / 2;
 #define VEL_MAX_KMH 5.0f
 #define VEL_MIN_KMH 0.5f
 
@@ -51,6 +55,7 @@ static lv_disp_drv_t disp_drv; /*A variable to hold the drivers. Must be static 
 static lv_indev_drv_t indev_drv;
 
 static lv_obj_t *scr1; // screen 1
+static lv_obj_t *scr2; // screen 1
 
 QueueHandle_t xQueuedt;
 SemaphoreHandle_t xSemaphore;
@@ -102,12 +107,14 @@ extern void vApplicationMallocFailedHook(void)
 	configASSERT((volatile void *)NULL);
 }
 lv_obj_t *labelTempo;
+lv_obj_t *labelTempo2;
 lv_obj_t *labelDuration;
 lv_obj_t *labelDistancia;
 lv_obj_t *labelVMedia;
 lv_obj_t *labelVInst;
 lv_obj_t *labelUp;
 lv_obj_t *labelGravando;
+lv_obj_t *labelAro;
 /************************************************************************/
 /* lvgl                                                                 */
 /************************************************************************/
@@ -283,11 +290,34 @@ static void settings_handler(lv_event_t *e)
 {
 	lv_event_code_t code = lv_event_get_code(e);
 
-	if (code == LV_EVENT_CLICKED)
-	{
+	if (code == LV_EVENT_CLICKED){
 		LV_LOG_USER("Clicked");
+		lv_scr_load(scr2);
 	}
 }
+
+static void back_handler(lv_event_t *e)
+{
+	lv_event_code_t code = lv_event_get_code(e);
+
+	if (code == LV_EVENT_CLICKED){
+		LV_LOG_USER("Clicked");
+		lv_scr_load(scr1);
+	}
+}
+
+static void aro_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+	lv_obj_t * obj = lv_event_get_target(e);
+	if(code == LV_EVENT_VALUE_CHANGED) {
+        char buf[32];
+        lv_roller_get_selected_str(obj, buf, sizeof(buf));
+        printf("Selected month: %s\n", buf);
+		RAIO = atoi(buf)*0.0253/2;
+    }
+}
+
 static void RTT_init(float freqPrescale, uint32_t IrqNPulses,
 					 uint32_t rttIRQSource)
 {
@@ -359,10 +389,14 @@ void lv_screen(void)
 	lv_img_set_src(background1, &background);
 	lv_obj_align(background1, LV_ALIGN_CENTER, 0, 0);
 
+	lv_obj_t *background2 = lv_img_create(scr2);
+	lv_img_set_src(background2, &background_aro);
+	lv_obj_align(background2, LV_ALIGN_CENTER, 0, 0);
+
 	static lv_style_t style;
 	lv_style_init(&style);
-	lv_style_set_bg_color(&style, lv_palette_darken(LV_PALETTE_GREY, 4));
-	lv_style_set_border_color(&style, lv_palette_darken(LV_PALETTE_GREY, 4));
+	lv_style_set_bg_color(&style, lv_palette_darken(LV_PALETTE_GREY, 3));
+	lv_style_set_border_color(&style, lv_palette_darken(LV_PALETTE_GREY, 3));
 	lv_style_set_border_width(&style, 5);
 
 	labelTempo = lv_label_create(scr1);
@@ -371,9 +405,19 @@ void lv_screen(void)
 	lv_obj_set_style_text_color(labelTempo, lv_color_white(), LV_STATE_DEFAULT);
 	lv_label_set_text_fmt(labelTempo, "%02d:%02d:%02d", 17, 46, 24);
 
+	labelTempo2 = lv_label_create(scr2);
+	lv_obj_align(labelTempo2, LV_ALIGN_TOP_RIGHT, -5, 5);
+	lv_obj_set_style_text_font(labelTempo2, &roboto20, LV_STATE_DEFAULT);
+	lv_obj_set_style_text_color(labelTempo2, lv_color_white(), LV_STATE_DEFAULT);
+	lv_label_set_text_fmt(labelTempo2, "%02d:%02d:%02d", 17, 46, 24);
+
 	lv_obj_t *logo = lv_img_create(scr1);
 	lv_img_set_src(logo, &logo_pequeno);
 	lv_obj_align(logo, LV_ALIGN_TOP_LEFT, 20, 5);
+
+	lv_obj_t *logo2 = lv_img_create(scr2);
+	lv_img_set_src(logo2, &logo_pequeno);
+	lv_obj_align(logo2, LV_ALIGN_TOP_LEFT, 20, 5);
 
 	lv_obj_t *labelPause;
 
@@ -479,6 +523,39 @@ void lv_screen(void)
 	lv_label_set_text(labelGravando, LV_SYMBOL_SAVE);
 	lv_obj_set_style_text_color(labelGravando, lv_color_white(), LV_STATE_DEFAULT);
 	lv_obj_add_flag(labelGravando, LV_OBJ_FLAG_HIDDEN);
+
+	lv_obj_t *labelBack;
+
+	lv_obj_t *btnBack = lv_btn_create(scr2);
+	lv_obj_add_event_cb(btnBack, back_handler, LV_EVENT_ALL, NULL);
+	lv_obj_align(btnBack, LV_ALIGN_TOP_LEFT, 10, 40);
+	lv_obj_add_style(btnBack, &style, 0);
+
+	labelBack = lv_label_create(btnBack);
+	lv_label_set_text(labelBack, LV_SYMBOL_NEW_LINE);
+	lv_obj_center(labelBack);
+	lv_obj_set_width(btnBack, 40);
+	lv_obj_set_height(btnBack, 40);
+
+	lv_obj_t *roller1 = lv_roller_create(scr2);
+    lv_roller_set_options(roller1,
+                        "12\n"
+                        "14\n"
+                        "16\n"
+                        "18\n"
+                        "20\n"
+                        "22\n"
+                        "24\n"
+                        "26",
+                        LV_ROLLER_MODE_INFINITE);
+
+	lv_obj_add_style(roller1, &style, 0);
+    lv_roller_set_visible_row_count(roller1, 5);
+    lv_obj_align(roller1, LV_ALIGN_CENTER, 8, 23);
+    lv_obj_add_event_cb(roller1, aro_handler, LV_EVENT_ALL, NULL);
+	lv_roller_set_selected(roller1, 4, LV_ANIM_ON);
+	lv_obj_set_width(roller1, 200);
+	lv_obj_set_height(roller1, 200);
 }
 
 static void task_lcd(void *pvParameters)
@@ -488,6 +565,7 @@ static void task_lcd(void *pvParameters)
 	io_init();
 
 	scr1 = lv_obj_create(NULL);
+	scr2 = lv_obj_create(NULL);
 	lv_screen();
 	lv_scr_load(scr1);
 
@@ -576,6 +654,7 @@ static void task_rtc(void *pvParameters)
 			rtc_get_time(RTC, &current_hour, &current_min, &current_sec);
 			rtc_get_date(RTC, &current_year, &current_month, &current_day, &current_week);
 			lv_label_set_text_fmt(labelTempo, "%02d:%02d:%02d", current_hour, current_min, current_sec);
+			lv_label_set_text_fmt(labelTempo2, "%02d:%02d:%02d", current_hour, current_min, current_sec);
 
 			if (conta_cronometro == 1){
 				cronometro = cronometro + 1;
