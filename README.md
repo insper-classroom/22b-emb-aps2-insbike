@@ -94,3 +94,8 @@ Detalhes da terceira interação da proposta de interface:
 - Imagem da proposta.  &#x2705;
 - Imagem da proposta no LCD.  &#x2705;
 - Vídeo.  &#x2705;
+
+### Iteração Final
+
+Não foi possível implementar o histórico, porém foi adicionado uma ideia de buzina no local. Foi feita também algumas mudanças em questão de design em geral, e a adição também de um indicador de quer o trajeto está sendo gravado!
+Link disponível para ver o funcionamento do ciclocomputador: https://youtu.be/VHmUJ8JxW8M
