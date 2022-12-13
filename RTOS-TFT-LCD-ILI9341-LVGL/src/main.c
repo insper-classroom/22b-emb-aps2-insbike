@@ -15,6 +15,7 @@
 #include "lvgl.h"
 #include "touch/touch.h"
 #include <stdio.h>
+#include "arm_math.h"
 
 LV_FONT_DECLARE(dseg10);
 LV_FONT_DECLARE(roboto20);
@@ -22,21 +23,23 @@ LV_FONT_DECLARE(roboto15);
 LV_IMG_DECLARE(background);
 LV_IMG_DECLARE(logo_pequeno);
 
-#include "arm_math.h"
-
-
-
 #define TASK_SIMULATOR_STACK_SIZE (4096 / sizeof(portSTACK_TYPE))
 #define TASK_SIMULATOR_STACK_PRIORITY (tskIDLE_PRIORITY)
 
-float RAIO = 0.508 / 2;
 #define VEL_MAX_KMH 5.0f
 #define VEL_MIN_KMH 0.5f
 
+// Definindo PIO para o SENSOR
 #define SENSOR_PIO PIOA
 #define SENSOR_PIO_ID ID_PIOA
 #define SENSOR_PIO_IDX 19
 #define SENSOR_PIO_IDX_MASK (1 << SENSOR_PIO_IDX)
+
+// Definindo o PIO para o BUZZER da buzina
+#define BUZZER_PIO				PIOB
+#define BUZZER_PIO_ID			ID_PIOB
+#define BUZZER_PIO_IDX			3
+#define BUZZER_PIO_IDX_MASK     (1 << BUZZER_PIO_IDX)
 // #define RAMP
 
 /************************************************************************/
@@ -54,19 +57,34 @@ static lv_color_t buf_1[LV_HOR_RES_MAX * LV_VER_RES_MAX];
 static lv_disp_drv_t disp_drv; /*A variable to hold the drivers. Must be static or global.*/
 static lv_indev_drv_t indev_drv;
 
+// Criação das telas
 static lv_obj_t *scr1; // screen 1
 static lv_obj_t *scr2; // screen 1
 
+// RTOS
 QueueHandle_t xQueuedt;
 SemaphoreHandle_t xSemaphore;
+SemaphoreHandle_t xSemaphoreHora;
+SemaphoreHandle_t xSemaphoreBuzina;
 
+// Variáveis Globais
 int conta_cronometro = 0;
 int cronometro = 0;
 float v_media = 0.0;
 float d = 0.0;
+float RAIO = 0.508 / 2;
+lv_obj_t *labelTempo;
+lv_obj_t *labelTempo2;
+lv_obj_t *labelDuration;
+lv_obj_t *labelDistancia;
+lv_obj_t *labelVMedia;
+lv_obj_t *labelVInst;
+lv_obj_t *labelUp;
+lv_obj_t *labelGravando;
+lv_obj_t *labelAro;
 
-typedef struct
-{
+// Definindo struct do RTC para o horário atualizar de 1s em 1s
+typedef struct{
 	uint32_t year;
 	uint32_t month;
 	uint32_t day;
@@ -76,7 +94,6 @@ typedef struct
 	uint32_t second;
 } calendar;
 
-SemaphoreHandle_t xSemaphoreHora;
 /************************************************************************/
 /* RTOS                                                                 */
 /************************************************************************/
@@ -89,9 +106,9 @@ extern void vApplicationIdleHook(void);
 extern void vApplicationTickHook(void);
 extern void vApplicationMallocFailedHook(void);
 extern void xPortSysTickHandler(void);
+void pin_toggle(Pio *pio, uint32_t mask);
 
-extern void vApplicationStackOverflowHook(xTaskHandle *pxTask, signed char *pcTaskName)
-{
+extern void vApplicationStackOverflowHook(xTaskHandle *pxTask, signed char *pcTaskName){
 	printf("stack overflow %x %s\r\n", pxTask, (portCHAR *)pcTaskName);
 	for (;;)
 	{
@@ -102,25 +119,16 @@ extern void vApplicationIdleHook(void) {}
 
 extern void vApplicationTickHook(void) {}
 
-extern void vApplicationMallocFailedHook(void)
-{
+extern void vApplicationMallocFailedHook(void){
 	configASSERT((volatile void *)NULL);
 }
-lv_obj_t *labelTempo;
-lv_obj_t *labelTempo2;
-lv_obj_t *labelDuration;
-lv_obj_t *labelDistancia;
-lv_obj_t *labelVMedia;
-lv_obj_t *labelVInst;
-lv_obj_t *labelUp;
-lv_obj_t *labelGravando;
-lv_obj_t *labelAro;
+
+
 /************************************************************************/
 /* lvgl                                                                 */
 /************************************************************************/
 
-static void event_handler(lv_event_t *e)
-{
+static void event_handler(lv_event_t *e){
 	lv_event_code_t code = lv_event_get_code(e);
 
 	if (code == LV_EVENT_CLICKED)
@@ -132,8 +140,9 @@ static void event_handler(lv_event_t *e)
 		LV_LOG_USER("Toggled");
 	}
 }
-void RTC_init(Rtc *rtc, uint32_t id_rtc, calendar t, uint32_t irq_type)
-{
+
+// Configurando RTC
+void RTC_init(Rtc *rtc, uint32_t id_rtc, calendar t, uint32_t irq_type){
 	/* Configura o PMC */
 	pmc_enable_periph_clk(ID_RTC);
 
@@ -154,8 +163,7 @@ void RTC_init(Rtc *rtc, uint32_t id_rtc, calendar t, uint32_t irq_type)
 	rtc_enable_interrupt(rtc, irq_type);
 }
 
-void RTC_Handler(void)
-{
+void RTC_Handler(void){
 	uint32_t ul_status = rtc_get_status(RTC);
 
 	/* seccond tick */
@@ -179,6 +187,7 @@ void RTC_Handler(void)
 	rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
 }
 
+// SIMULADOR disponibilizado pelo professor
 /**
  * raio 20" => 50,8 cm (diametro) => 0.508/2 = 0.254m (raio)
  * w = 2 pi f (m/s)
@@ -188,14 +197,12 @@ void RTC_Handler(void)
  *           f = 0.87Hz
  *           t = 1/f => 1/0.87 = 1,149s
  */
-float kmh_to_hz(float vel, float raio)
-{
+float kmh_to_hz(float vel, float raio){
 	float f = vel / (2 * PI * raio * 3.6);
 	return (f);
 }
 
-static void task_simulador(void *pvParameters)
-{
+static void task_simulador(void *pvParameters){
 
 	pmc_enable_periph_clk(ID_PIOC);
 	pio_set_output(PIOC, PIO_PC31, 1, 0, 0);
@@ -236,8 +243,47 @@ static void task_simulador(void *pvParameters)
 	}
 }
 
-static void pause_handler(lv_event_t *e)
-{
+// Inicialização do TC para tocar a buzina com as funções necessárias
+void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq) {
+	uint32_t ul_div;
+	uint32_t ul_tcclks;
+	uint32_t ul_sysclk = sysclk_get_cpu_hz();
+
+	/* Configura o PMC */
+	pmc_enable_periph_clk(ID_TC);
+
+	/** Configura o TC para operar em  freq hz e interrupçcão no RC compare */
+	tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+	tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+	tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+
+	/* Configura NVIC*/
+	NVIC_SetPriority(ID_TC, 4);
+	NVIC_EnableIRQ((IRQn_Type) ID_TC);
+	tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+}
+
+void pin_toggle(Pio *pio, uint32_t mask) {
+	if(pio_get_output_data_status(pio, mask))
+	pio_clear(pio, mask);
+	else
+	pio_set(pio,mask);
+}
+
+void TC0_Handler(void) {
+	/**
+	* Devemos indicar ao TC que a interrupção foi satisfeita.
+	* Isso é realizado pela leitura do status do periférico
+	**/
+	volatile uint32_t status = tc_get_status(TC0, 0);
+
+	// faz alguma coisa
+	/** Muda o estado do LED (pisca) **/
+	pin_toggle(BUZZER_PIO, BUZZER_PIO_IDX_MASK);
+}
+
+// Handlers dos objetos
+static void pause_handler(lv_event_t *e){
 	lv_event_code_t code = lv_event_get_code(e);
 
 	if (code == LV_EVENT_CLICKED)
@@ -248,8 +294,7 @@ static void pause_handler(lv_event_t *e)
 	}
 }
 
-static void play_handler(lv_event_t *e)
-{
+static void play_handler(lv_event_t *e){
 	lv_event_code_t code = lv_event_get_code(e);
 
 	if (code == LV_EVENT_CLICKED){
@@ -259,8 +304,7 @@ static void play_handler(lv_event_t *e)
 		}
 }
 
-static void refresh_handler(lv_event_t *e)
-{
+static void refresh_handler(lv_event_t *e){
 	lv_event_code_t code = lv_event_get_code(e);
 
 	if (code == LV_EVENT_CLICKED){
@@ -276,18 +320,19 @@ static void refresh_handler(lv_event_t *e)
 	}
 }
 
-static void list_handler(lv_event_t *e)
-{
+static void buzina_handler(lv_event_t *e){
 	lv_event_code_t code = lv_event_get_code(e);
 
-	if (code == LV_EVENT_CLICKED)
-	{
-		LV_LOG_USER("Clicked");
+	if (code == LV_EVENT_CLICKED){
+		xSemaphoreGiveFromISR(xSemaphoreBuzina, 0);
+		// printf("entrei aqui");
+		tc_start(TC0, 0);
+		// delay_ms(500);
+		// tc_stop(TC0, 0);
 	}
 }
 
-static void settings_handler(lv_event_t *e)
-{
+static void settings_handler(lv_event_t *e){
 	lv_event_code_t code = lv_event_get_code(e);
 
 	if (code == LV_EVENT_CLICKED){
@@ -296,8 +341,7 @@ static void settings_handler(lv_event_t *e)
 	}
 }
 
-static void back_handler(lv_event_t *e)
-{
+static void back_handler(lv_event_t *e){
 	lv_event_code_t code = lv_event_get_code(e);
 
 	if (code == LV_EVENT_CLICKED){
@@ -306,8 +350,7 @@ static void back_handler(lv_event_t *e)
 	}
 }
 
-static void aro_handler(lv_event_t *e)
-{
+static void aro_handler(lv_event_t *e){
     lv_event_code_t code = lv_event_get_code(e);
 	lv_obj_t * obj = lv_event_get_target(e);
 	if(code == LV_EVENT_VALUE_CHANGED) {
@@ -318,9 +361,8 @@ static void aro_handler(lv_event_t *e)
     }
 }
 
-static void RTT_init(float freqPrescale, uint32_t IrqNPulses,
-					 uint32_t rttIRQSource)
-{
+// Configurando RTT para pegar os pulsos da bicicleta
+static void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource){
 
 	uint16_t pllPreScale = (int)(((float)32768) / freqPrescale);
 
@@ -349,8 +391,7 @@ static void RTT_init(float freqPrescale, uint32_t IrqNPulses,
 		rtt_disable_interrupt(RTT, RTT_MR_RTTINCIEN | RTT_MR_ALMIEN);
 }
 
-void RTT_Handler(void)
-{
+void RTT_Handler(void){
 	uint32_t ul_status;
 	ul_status = rtt_get_status(RTT);
 
@@ -360,17 +401,16 @@ void RTT_Handler(void)
 	}
 }
 
-
-void sensor_callback(void)
-{
+// Callback para simular a descida do pulso
+void sensor_callback(void){
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	// Libera semaforo
 	xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
 }
 
-static void io_init(void)
-{
-	/* Configure speed sensor input */
+// Configurando os pinos
+static void io_init(void){
+
 	pio_configure(SENSOR_PIO, PIO_INPUT, SENSOR_PIO_IDX_MASK, PIO_DEFAULT);
 	pio_set_debounce_filter(SENSOR_PIO, SENSOR_PIO_IDX_MASK, 60);
 	pio_handler_set(SENSOR_PIO, SENSOR_PIO_ID, SENSOR_PIO_IDX_MASK, PIO_IT_FALL_EDGE, &sensor_callback);
@@ -378,12 +418,19 @@ static void io_init(void)
 	pio_get_interrupt_status(SENSOR_PIO);
 	NVIC_EnableIRQ(SENSOR_PIO_ID);
 	NVIC_SetPriority(SENSOR_PIO_ID, 4);
+
+	// Ativa o PIO na qual o BUZZER foi conectado
+	// para que possamos controlar o BUZZER.
+	pmc_enable_periph_clk(BUZZER_PIO_ID);
+	pio_set_output(BUZZER_PIO, BUZZER_PIO_IDX_MASK, 0, 0, 0);
+
 }
+
+
 /************************************************************************/
-/* TASKS                                                                */
+/* TASKS E FUNÇÕES PRINCIPAIS                                           */
 /************************************************************************/
-void lv_screen(void)
-{
+void lv_screen(void){
 
 	lv_obj_t *background1 = lv_img_create(scr1);
 	lv_img_set_src(background1, &background);
@@ -458,18 +505,18 @@ void lv_screen(void)
 	lv_obj_set_width(btnRefresh, 40);
 	lv_obj_set_height(btnRefresh, 40);
 
-	lv_obj_t *labelList;
+	lv_obj_t *labelBuzina;
 
-	lv_obj_t *btnList = lv_btn_create(scr1);
-	lv_obj_add_event_cb(btnList, list_handler, LV_EVENT_ALL, NULL);
-	lv_obj_align(btnList, LV_ALIGN_BOTTOM_MID, 0, -15);
-	lv_obj_add_style(btnList, &style, 0);
+	lv_obj_t *btnBuzina = lv_btn_create(scr1);
+	lv_obj_add_event_cb(btnBuzina, buzina_handler, LV_EVENT_ALL, NULL);
+	lv_obj_align(btnBuzina, LV_ALIGN_BOTTOM_MID, 0, -15);
+	lv_obj_add_style(btnBuzina, &style, 0);
 
-	labelList = lv_label_create(btnList);
-	lv_label_set_text(labelList, LV_SYMBOL_LIST);
-	lv_obj_center(labelList);
-	lv_obj_set_width(btnList, 40);
-	lv_obj_set_height(btnList, 40);
+	labelBuzina = lv_label_create(btnBuzina);
+	lv_label_set_text(labelBuzina, LV_SYMBOL_VOLUME_MAX);
+	lv_obj_center(labelBuzina);
+	lv_obj_set_width(btnBuzina, 40);
+	lv_obj_set_height(btnBuzina, 40);
 
 	lv_obj_t *labelSettings;
 
@@ -558,8 +605,7 @@ void lv_screen(void)
 	lv_obj_set_height(roller1, 200);
 }
 
-static void task_lcd(void *pvParameters)
-{
+static void task_lcd(void *pvParameters){
 	int px, py;
 
 	io_init();
@@ -569,9 +615,7 @@ static void task_lcd(void *pvParameters)
 	lv_screen();
 	lv_scr_load(scr1);
 
-	for (;;)
-	{
-
+	for (;;){
 		lv_tick_inc(50);
 		lv_task_handler();
 		vTaskDelay(50);
@@ -580,14 +624,14 @@ static void task_lcd(void *pvParameters)
 
 static void task_operacoes(void *pvParameters){
 	RTT_init(1000, 0, 0);
+	TC_init(TC0, ID_TC0, 0, 1000);
 	float tempo_inicial = 0.0;
 	float tempo_final = 0.0;
 	float prev_speed = 0.0;
 	int operacao = 1;
 	float f, w, v, tempo_decorrido, a;
 	float prev_a = 0.0;
-	for (;;)
-	{
+	for (;;){
 		if (xSemaphoreTake(xSemaphore, 0)){
 			if (operacao == 1){
 				tempo_inicial = rtt_read_timer_value(RTT);
@@ -632,8 +676,8 @@ static void task_operacoes(void *pvParameters){
 		}
 	}
 }
-static void task_rtc(void *pvParameters)
-{
+
+static void task_rtc(void *pvParameters){
 	calendar rtc_initial = {2018, 3, 19, 12, 15, 45, 1};
 
 	/** Configura RTC */
@@ -647,10 +691,9 @@ static void task_rtc(void *pvParameters)
 
 	int minuto = 0;
 	int segundo = 0;
-	for (;;)
-	{
-		if (xSemaphoreTake(xSemaphoreHora, 0) == pdTRUE)
-		{
+	int antigo_second = 0;
+	for (;;){
+		if (xSemaphoreTake(xSemaphoreHora, 0) == pdTRUE){
 			rtc_get_time(RTC, &current_hour, &current_min, &current_sec);
 			rtc_get_date(RTC, &current_year, &current_month, &current_day, &current_week);
 			lv_label_set_text_fmt(labelTempo, "%02d:%02d:%02d", current_hour, current_min, current_sec);
@@ -663,17 +706,25 @@ static void task_rtc(void *pvParameters)
 				segundo = cronometro % 60;
 
 				lv_label_set_text_fmt(labelDuration, "%02d:%02d:%02d", 0, minuto, segundo);
+			}
 
+			if (xSemaphoreGiveFromISR(xSemaphoreBuzina, 0)){
+				antigo_second = current_sec;
+			}
+			else{
+				if (current_sec - antigo_second > 4 || current_sec - antigo_second + 60 > 4 ){
+					tc_stop(TC0, 0);
+					antigo_second = 0;
+				}
 			}
 		}
 	}
 }
 /************************************************************************/
-/* configs                                                              */
+/* mais configs                                                              */
 /************************************************************************/
 
-static void configure_lcd(void)
-{
+static void configure_lcd(void){
 	/**LCD pin configure on SPI*/
 	pio_configure_pin(LCD_SPI_MISO_PIO, LCD_SPI_MISO_FLAGS); //
 	pio_configure_pin(LCD_SPI_MOSI_PIO, LCD_SPI_MOSI_FLAGS);
@@ -686,8 +737,7 @@ static void configure_lcd(void)
 	ili9341_backlight_on();
 }
 
-static void configure_console(void)
-{
+static void configure_console(void){
 	const usart_serial_options_t uart_serial_options = {
 		.baudrate = USART_SERIAL_EXAMPLE_BAUDRATE,
 		.charlength = USART_SERIAL_CHAR_LENGTH,
@@ -706,8 +756,7 @@ static void configure_console(void)
 /* port lvgl                                                            */
 /************************************************************************/
 
-void my_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
-{
+void my_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p){
 	ili9341_set_top_left_limit(area->x1, area->y1);
 	ili9341_set_bottom_right_limit(area->x2, area->y2);
 	ili9341_copy_pixels_to_screen(color_p, (area->x2 + 1 - area->x1) * (area->y2 + 1 - area->y1));
@@ -717,8 +766,7 @@ void my_flush_cb(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *col
 	lv_disp_flush_ready(disp_drv);
 }
 
-void my_input_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
-{
+void my_input_read(lv_indev_drv_t *drv, lv_indev_data_t *data){
 	int px, py, pressed;
 
 	if (readPoint(&px, &py))
@@ -730,8 +778,7 @@ void my_input_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
 	data->point.y = 320 - px;
 }
 
-void configure_lvgl(void)
-{
+void configure_lvgl(void){
 	lv_init();
 	lv_disp_draw_buf_init(&disp_buf, buf_1, NULL, LV_HOR_RES_MAX * LV_VER_RES_MAX);
 
@@ -754,8 +801,7 @@ void configure_lvgl(void)
 /************************************************************************/
 /* main                                                                 */
 /************************************************************************/
-int main(void)
-{
+int main(void){
 	/* board and sys init */
 	board_init();
 	sysclk_init();
@@ -800,6 +846,10 @@ int main(void)
 
 	xSemaphoreHora = xSemaphoreCreateBinary();
 	if (xSemaphoreHora == NULL)
+		printf("falha em criar o semaforo \n");
+
+	xSemaphoreBuzina = xSemaphoreCreateBinary();
+	if (xSemaphoreBuzina == NULL)
 		printf("falha em criar o semaforo \n");
 
 	/* Start the scheduler. */
